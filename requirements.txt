@@ -16,3 +16,18 @@ pytest==8.0.0
 
 # Token counting
 tiktoken==0.5.2
+
+# ============================================
+# Phase 2: Embeddings & Vector Store
+# ============================================
+
+# Embeddings (converts text to vectors)
+# sentence-transformers includes PyTorch
+sentence-transformers==2.3.1
+
+# Vector database (fast similarity search)
+faiss-cpu==1.7.4
+
+# PyTorch (required by sentence-transformers)
+# Will be installed automatically with sentence-transformers
+# torch==2.1.2
