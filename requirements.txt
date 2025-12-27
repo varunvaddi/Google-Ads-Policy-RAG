@@ -31,3 +31,13 @@ faiss-cpu==1.7.4
 # PyTorch (required by sentence-transformers)
 # Will be installed automatically with sentence-transformers
 # torch==2.1.2
+
+# ============================================
+# Phase 3: Hybrid Search & Reranking
+# ============================================
+
+# BM25 keyword search
+rank-bm25==0.2.2
+
+# Reranking model (cross-encoder)
+# Uses sentence-transformers, so no extra install needed
