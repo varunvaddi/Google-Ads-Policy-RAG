@@ -13,3 +13,6 @@ tqdm==4.66.1
 
 # Testing
 pytest==8.0.0
+
+# Token counting
+tiktoken==0.5.2
