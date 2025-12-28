@@ -41,3 +41,13 @@ rank-bm25==0.2.2
 
 # Reranking model (cross-encoder)
 # Uses sentence-transformers, so no extra install needed
+
+# ============================================
+# Phase 4: LLM Generation & Structured Output
+# ============================================
+
+# OpenAI API for LLM
+openai==1.12.0
+
+# Pydantic for structured output
+pydantic==2.6.1
