@@ -8,20 +8,25 @@ import streamlit as st
 import sys
 from pathlib import Path
 import time
-import os
 
+# -------------------------------
 # Setup imports
+# -------------------------------
 sys.path.insert(0, str(Path(__file__).parent))
 from src.generation.decision_engine_streamlit import GeminiPolicyEngine
 
+# -------------------------------
 # Page config
+# -------------------------------
 st.set_page_config(
     page_title="Google Ads Policy RAG",
     page_icon="🔍",
     layout="wide"
 )
 
+# -------------------------------
 # Custom CSS
+# -------------------------------
 st.markdown("""
 <style>
     .main-header { font-size: 3rem; font-weight: bold; text-align: center; margin-bottom: 1rem; }
@@ -47,7 +52,6 @@ def load_engine():
         st.error("❌ GOOGLE_API_KEY not found in Streamlit Secrets!")
         st.stop()
     return GeminiPolicyEngine(api_key=api_key)
-
 
 # -------------------------------
 # Header
@@ -101,28 +105,34 @@ tab1, tab2, tab3 = st.tabs(["🧪 Ad Review", "📚 Example Cases", "📈 System
 with tab1:
     st.header("Ad Policy Review")
     
+    # Initialize session state
+    if "ad_text" not in st.session_state:
+        st.session_state.ad_text = ""
+    
     # Input
     col1, col2 = st.columns([3, 1])
     
     with col1:
         ad_text = st.text_area(
             "Enter ad text to review:",
+            value=st.session_state.ad_text,
             placeholder="Example: Lose 15 pounds in one week with this miracle pill!",
             height=100
         )
+        st.session_state.ad_text = ad_text  # persist across button clicks
     
     with col2:
         st.markdown("### Quick Examples")
-        if st.button("🏥 Health Claim"):
-            ad_text = "Lose 15 pounds in one week with this miracle pill!"
-        if st.button("💰 Crypto"):
-            ad_text = "Learn crypto trading from certified experts!"
-        if st.button("📱 Product"):
-            ad_text = "Buy smartphone - free shipping over $50"
+        if st.button("🏥 Health Claim", key="health"):
+            st.session_state.ad_text = "Lose 15 pounds in one week with this miracle pill!"
+        if st.button("💰 Crypto", key="crypto"):
+            st.session_state.ad_text = "Learn crypto trading from certified experts!"
+        if st.button("📱 Product", key="product"):
+            st.session_state.ad_text = "Buy smartphone - free shipping over $50"
     
     # Review button
-    if st.button("🔍 Review Ad", type="primary", use_container_width=True):
-        if not ad_text:
+    if st.button("🔍 Review Ad", key="review"):
+        if not st.session_state.ad_text:
             st.warning("⚠️ Please enter ad text to review")
         else:
             # Load engine
@@ -132,14 +142,13 @@ with tab1:
             # Review ad
             with st.spinner("🤖 Analyzing ad against Google Ads policies..."):
                 start_time = time.time()
-                decision = engine.review_ad(ad_text)
+                decision = engine.review_ad(st.session_state.ad_text)
                 elapsed = time.time() - start_time
             
             # Display results
             st.markdown("---")
             st.header("📋 Policy Decision")
             
-            # Decision badge
             decision_class = f"decision-{decision.decision}"
             decision_emoji = {
                 "allowed": "✅",
@@ -163,7 +172,7 @@ with tab1:
             with col3:
                 st.metric("Escalation", "Yes" if decision.escalation_required else "No")
             with col4:
-                st.metric("Risk Factors", len(decision.risk_factors) if decision.risk_factors else 0)
+                st.metric("Risk Factors", len(decision.risk_factors or []))
             
             # Details
             st.markdown("### 📂 Policy Section")
