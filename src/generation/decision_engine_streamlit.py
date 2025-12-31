@@ -24,15 +24,15 @@ load_dotenv()
 class GeminiPolicyEngine:
     """Main Policy Decision Engine - Uses Clean Hybrid Search"""
     
-    def __init__(self, model_name: str = "gemini-2.5-flash-preview-09-2025"):
+    def __init__(self, model_name: str = "gemini-2.5-flash-preview-09-2025", api_key: str = None):
         print("🚀 Initializing Policy Engine (Clean Data)...")
         
-        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError(
                 "GOOGLE_API_KEY not found!\n"
-                "Get key: https://aistudio.google.com/app/apikey\n"
-                "Set: echo 'GOOGLE_API_KEY=your-key' > .env"
+                "Set it in Streamlit secrets or .env"
             )
         
         genai.configure(api_key=api_key)
@@ -106,6 +106,7 @@ Respond ONLY with valid JSON:
   "escalation_required": boolean
 }}"""
             
+            # Use latest genai API
             model = genai.GenerativeModel(
                 model_name=self.model_name,
                 generation_config={
@@ -117,7 +118,7 @@ Respond ONLY with valid JSON:
             response = model.generate_content(full_prompt)
             response_text = response.text.strip()
             
-            # Clean markdown
+            # Remove markdown wrappers
             if response_text.startswith("```json"):
                 response_text = response_text.split("```json")[1].split("```")[0].strip()
             elif response_text.startswith("```"):
