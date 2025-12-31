@@ -12,14 +12,14 @@ from src.generation.decision_engine import GeminiPolicyEngine
 
 
 def main():
-    print("=" * 80)
-    print("PHASE 4: COMPLETE RAG SYSTEM (Google Gemini - FREE)")
-    print("=" * 80)
+    print("=" * 60)
+    print("PHASE 4: COMPLETE RAG SYSTEM")
+    print("=" * 60)
     print()
     
     # Initialize
     print("🚀 Initializing...")
-    print("-" * 80)
+    print("-" * 60)
     try:
         engine = GeminiPolicyEngine(model_name="gemini-2.5-flash-preview-09-2025", use_reranking=True)
     except ValueError as e:
@@ -48,14 +48,14 @@ def main():
     ]
     
     print("🧪 Testing...")
-    print("-" * 80)
+    print("-" * 60)
     
     results = []
     
     for i, test in enumerate(test_cases, 1):
-        print(f"\n{'='*80}")
+        print(f"\n{'='*60}")
         print(f"TEST {i}: {test['name']}")
-        print('='*80)
+        print('='*60)
         print(f"\n📝 Ad: \"{test['ad']}\"")
         print(f"📌 Expected: {test['expected']}")
         
@@ -74,10 +74,12 @@ def main():
             'match': match
         })
     
+
+
     # Summary
-    print("\n\n" + "=" * 80)
-    print("📊 SUMMARY")
-    print("=" * 80)
+    print("\n📊 PHASE IV: SUMMARY")
+    print("-" * 60)
+    print()
     
     for r in results:
         status = "✅" if r['match'] else "❌"
@@ -86,26 +88,14 @@ def main():
     passed = sum(1 for r in results if r['match'])
     total = len(results)
     
-    print(f"\n{'='*80}")
+    print(f"\n{'='*60}")
     print(f"Result: {passed}/{total} passed ({passed/total:.0%})")
     
     # Final
-    print("\n\n" + "=" * 80)
+    print("\n\n" + "=" * 60)
     print("✨ COMPLETE RAG SYSTEM BUILT!")
-    print("=" * 80)
-    print()
-    print("✅ Phase 1: Data Ingestion")
-    print("✅ Phase 2: Vector Search")
-    print("✅ Phase 3: Hybrid + Reranking")
-    print("✅ Phase 4: LLM Generation")
-    print()
-    print("🎉 CONGRATULATIONS!")
-    print("   Production-grade RAG system complete!")
-    print()
-    print("💰 Total Cost: $0 (Gemini Free Tier)")
-    print("⚡ Latency: ~2.5 seconds per query")
-    print("🎯 Accuracy: ~90% on test cases")
-    print()
+    print("=" * 60)
+  
 
 
 if __name__ == "__main__":

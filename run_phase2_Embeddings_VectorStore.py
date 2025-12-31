@@ -16,22 +16,21 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from retrieval.generate_embeddings import EmbeddingGenerator
-from retrieval.vector_store import VectorStore
-from retrieval.search import PolicySearch
+from src.retrieval.generate_embeddings import EmbeddingGenerator
+from src.retrieval.build_vector_store import VectorStore
+from src.retrieval.search import PolicySearch
 
 
 def main():
-    """Run complete Phase 2 pipeline"""
     
-    print("=" * 80)
+    print("=" * 60)
     print("PHASE 2: EMBEDDINGS & VECTOR STORE")
-    print("=" * 80)
+    print("=" * 60)
     print()
     
     # Step 1: Generate embeddings
     print("🔢 STEP 1: Generating Embeddings")
-    print("-" * 80)
+    print("-" * 60)
     generator = EmbeddingGenerator()
     embeddings, chunks = generator.run()
     print()
@@ -40,16 +39,20 @@ def main():
         print("❌ Embedding generation failed. Exiting.")
         return
     
+
+
     # Step 2: Build vector store
     print("🗄️  STEP 2: Building Vector Store (FAISS)")
-    print("-" * 80)
+    print("-" * 60)
     store = VectorStore()
     store.run()
     print()
     
+
+
     # Step 3: Test search
     print("🔍 STEP 3: Testing Search")
-    print("-" * 80)
+    print("-" * 60)
     search = PolicySearch()
     
     # Test queries
@@ -70,10 +73,11 @@ def main():
     
     print()
     
+
+    
     # Summary
-    print("=" * 80)
-    print("✨ PHASE 2 COMPLETE!")
-    print("=" * 80)
+    print("\n📊 PHASE II: SUMMARY")
+    print("-" * 60)
     print()
     print("📊 What You Built:")
     print(f"   • Generated {len(embeddings)} embeddings (1024-dim each)")
@@ -84,15 +88,6 @@ def main():
     print("   • data/embeddings/embeddings.npy")
     print("   • data/embeddings/metadata.json")
     print("   • data/embeddings/faiss.index")
-    print()
-    print("🧪 Try it yourself:")
-    print("   python -c \"from src.retrieval.search import PolicySearch; \\")
-    print("             s = PolicySearch(); \\")
-    print("             s.print_results(s.search('your query here'))\"")
-    print()
-    print("🚀 Next: Phase 3 (Hybrid Search + Reranking)")
-    print()
-
 
 if __name__ == "__main__":
     try:

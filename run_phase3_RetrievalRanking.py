@@ -18,30 +18,31 @@ import time
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from retrieval.bm25_search import BM25Search
-from retrieval.hybrid_search import HybridSearch
-from retrieval.reranker import Reranker
-from retrieval.search import PolicySearch
+from src.retrieval.bm25_search import BM25Search
+from src.retrieval.hybrid_search import HybridSearch
+from src.retrieval.reranker import Reranker
+from src.retrieval.search import PolicySearch
 
 
 def main():
-    """Run complete Phase 3 pipeline"""
     
-    print("=" * 80)
+    print("=" * 60)
     print("PHASE 3: ADVANCED RETRIEVAL")
-    print("=" * 80)
+    print("=" * 60)
     print()
     
     # Step 1: Build BM25 index
     print("🔤 STEP 1: Building BM25 Index")
-    print("-" * 80)
+    print("-" * 60)
     bm25 = BM25Search()
     bm25.run()
     print()
     
+
+
     # Step 2: Test hybrid search
     print("🔄 STEP 2: Testing Hybrid Search (Dense + BM25)")
-    print("-" * 80)
+    print("-" * 60)
     print("   Initializing...")
     hybrid = HybridSearch()
     
@@ -56,9 +57,11 @@ def main():
     print(f"   Top result: {' > '.join(hybrid_results[0]['metadata']['hierarchy'])}")
     print()
     
+
+
     # Step 3: Test reranking
     print("🎯 STEP 3: Testing Cross-Encoder Reranking")
-    print("-" * 80)
+    print("-" * 60)
     print("   Loading reranker model...")
     reranker = Reranker()
     
@@ -72,9 +75,11 @@ def main():
     print(f"\n   ✅ Reranking completed in {rerank_time*1000:.0f}ms")
     print()
     
+
+
     # Step 4: Comparison
     print("📊 STEP 4: Method Comparison")
-    print("-" * 80)
+    print("-" * 60)
     
     # Compare different methods
     print("\nTesting query: '{}'".format(test_query))
@@ -109,10 +114,11 @@ def main():
     
     print()
     
+
+
     # Summary
-    print("=" * 80)
-    print("✨ PHASE 3 COMPLETE!")
-    print("=" * 80)
+    print("\n📊 PHASE III: SUMMARY")
+    print("-" * 60)
     print()
     print("📊 What You Built:")
     print("   • BM25 keyword search index")
@@ -126,14 +132,6 @@ def main():
     print(f"   • Hybrid search: ~{hybrid_time*1000:.0f}ms")
     print(f"   • Reranking: ~{rerank_time*1000:.0f}ms")
     print(f"   • Total: ~{(hybrid_time + rerank_time)*1000:.0f}ms")
-    print()
-    print("📈 Expected Improvements:")
-    print("   • Recall: +15-20% over dense-only")
-    print("   • Precision: +10-15% with reranking")
-    print()
-    print("🚀 Next: Phase 4 (LLM Generation & Structured Output)")
-    print()
-
 
 if __name__ == "__main__":
     try:
