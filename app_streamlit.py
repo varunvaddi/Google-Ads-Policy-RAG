@@ -12,7 +12,7 @@ import os
 
 # Setup imports
 sys.path.insert(0, str(Path(__file__).parent))
-from src.generation.decision_engine import GeminiPolicyEngine
+from src.generation.decision_engine_streamlit import GeminiPolicyEngine
 
 # Page config
 st.set_page_config(
