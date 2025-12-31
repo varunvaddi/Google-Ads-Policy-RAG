@@ -8,8 +8,8 @@ WHY THIS STEP?
 - Extract hierarchical structure (sections/subsections)
 - Preserve metadata for citations
 
-INPUT: data/raw_final/*.html (22 files)
-OUTPUT: data/processed_v2/parsed_sections.json (~60-80 sections)
+INPUT: data/raw/*.html (22 files)
+OUTPUT: data/processed/parsed_sections.json (~60-80 sections)
 """
 
 import os
@@ -21,7 +21,7 @@ from datetime import datetime
 from tqdm import tqdm
 
 
-class PolicyParserV2:
+class PolicyParser:
     """
     Parses Google Ads policy HTML files into structured sections
     
@@ -34,8 +34,8 @@ class PolicyParserV2:
     
     def __init__(
         self, 
-        input_dir: str = "data/raw_final",
-        output_dir: str = "data/processed_v2"
+        input_dir: str = "data/raw",
+        output_dir: str = "data/processed"
     ):
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
@@ -353,7 +353,7 @@ class PolicyParserV2:
 
 def main():
     """Run the parser"""
-    parser = PolicyParserV2()
+    parser = PolicyParser()
     
     # Parse all policies
     sections = parser.parse_all_policies()

@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.generation.decision_schema import PolicyDecision, PolicyQuestion
 from src.generation.prompts import format_policy_review_prompt, format_policy_qa_prompt
-from src.retrieval.hybrid_search_v2_clean import HybridSearchV2Clean  # ← UPDATED
+from src.retrieval.hybrid_search import HybridSearch  # ← UPDATED
 
 load_dotenv()
 
@@ -40,7 +40,7 @@ class GeminiPolicyEngine:
         self.model_name = model_name
         
         print("   Loading clean hybrid search (BM25 + Semantic + Reranking)...")
-        self.hybrid_search = HybridSearchV2Clean()  # ← UPDATED
+        self.hybrid_search = HybridSearch()  # ← UPDATED
         
         print("✅ Ready with 341 clean chunks!")
     

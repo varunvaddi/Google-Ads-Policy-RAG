@@ -12,7 +12,7 @@ from typing import List, Dict
 from collections import Counter
 import numpy as np
 
-from src.retrieval.hybrid_search_v2_clean import HybridSearchV2Clean
+from src.retrieval.hybrid_search import HybridSearch
 from src.generation.decision_engine import GeminiPolicyEngine
 
 
@@ -33,7 +33,7 @@ class RAGEvaluator:
         
         # Load systems
         print("\nLoading systems...")
-        self.retrieval = HybridSearchV2Clean()
+        self.retrieval = HybridSearch()
         self.engine = GeminiPolicyEngine()
         
         # Test cases

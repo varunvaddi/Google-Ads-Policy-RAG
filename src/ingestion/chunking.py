@@ -13,8 +13,8 @@ STRATEGY:
 - Add overlap to maintain context across chunks
 - Preserve metadata for citations
 
-INPUT: data/processed_v2/parsed_sections.json (194 sections)
-OUTPUT: data/processed_v2/chunks.json (~200-250 chunks)
+INPUT: data/processed/parsed_sections.json (194 sections)
+OUTPUT: data/processed/chunks.json (~200-250 chunks)
 """
 
 import json
@@ -24,7 +24,7 @@ from collections import Counter
 import tiktoken
 
 
-class PolicyChunkerV2:
+class PolicyChunker:
     """
     Intelligent chunking that preserves policy structure
     
@@ -38,8 +38,8 @@ class PolicyChunkerV2:
     
     def __init__(
         self,
-        input_file: str = "data/processed_v2/parsed_sections.json",
-        output_dir: str = "data/processed_v2",
+        input_file: str = "data/processed/parsed_sections.json",
+        output_dir: str = "data/processed",
         chunk_size: int = 800,
         chunk_overlap: int = 100,
         min_chunk_size: int = 200
@@ -294,7 +294,7 @@ def main():
     print("PHASE B: SMART CHUNKING")
     print("="*80)
     
-    chunker = PolicyChunkerV2()
+    chunker = PolicyChunker()
     
     # Load sections
     sections = chunker.load_sections()

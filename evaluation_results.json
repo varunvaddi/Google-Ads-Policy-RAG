@@ -1,13 +1,13 @@
 {
   "retrieval": {
     "recall@5": 0.7777777777777778,
-    "mrr": 0.6481481481481481,
-    "avg_top_score": 0.03413524105498153
+    "mrr": 0.7777777777777778,
+    "avg_top_score": 0.02278614776959229
   },
   "decisions": {
     "decision_accuracy": 0.8,
-    "policy_accuracy": 0.5555555555555556,
-    "avg_confidence": 0.3408979931487702,
+    "policy_accuracy": 0.6666666666666666,
+    "avg_confidence": 0.2918695610653377,
     "escalation_rate": 1.0
   },
   "system": {

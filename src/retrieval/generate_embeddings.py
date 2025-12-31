@@ -13,8 +13,8 @@ MODEL: BGE-large-en-v1.5
 - Trained on 200M+ text pairs
 - Free, runs locally on your laptop
 
-INPUT: data/processed_v2/chunks.json (345 chunks)
-OUTPUT: data/embeddings_v2/embeddings.npy (345 × 1024 array)
+INPUT: data/processed/chunks.json (345 chunks)
+OUTPUT: data/embeddings/embeddings.npy (345 × 1024 array)
 """
 
 import json
@@ -27,7 +27,7 @@ from tqdm import tqdm
 from sentence_transformers import SentenceTransformer
 
 
-class EmbeddingGeneratorV2:
+class EmbeddingGenerator:
     """
     Generate embeddings for policy chunks using BGE-large
     
@@ -40,8 +40,8 @@ class EmbeddingGeneratorV2:
     
     def __init__(
         self,
-        chunks_file: str = "data/processed_v2/chunks.json",
-        output_dir: str = "data/embeddings_v2",
+        chunks_file: str = "data/processed/chunks.json",
+        output_dir: str = "data/embeddings",
         model_name: str = "BAAI/bge-large-en-v1.5",
         batch_size: int = 32
     ):
@@ -264,13 +264,13 @@ class EmbeddingGeneratorV2:
 def main():
     """Run embedding generation"""
     
-    generator = EmbeddingGeneratorV2()
+    generator = EmbeddingGenerator()
     
     # Load chunks
     chunks = generator.load_chunks()
     
     if not chunks:
-        print("\n❌ No chunks found! Run chunking_v2.py first.")
+        print("\n❌ No chunks found! Run chunking.py first.")
         return
     
     # Generate embeddings
