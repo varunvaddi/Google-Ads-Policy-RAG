@@ -1,6 +1,6 @@
 """
-Policy Decision Engine - FINAL VERSION
-Uses Google Gemini (FREE)
+Policy Decision Engine - CLEAN DATA VERSION
+Uses Google Gemini (FREE) + Clean Hybrid Search (341 chunks, no junk)
 """
 
 import os
@@ -17,17 +17,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.generation.decision_schema import PolicyDecision, PolicyQuestion
 from src.generation.prompts import format_policy_review_prompt, format_policy_qa_prompt
-from src.retrieval.hybrid_search import HybridSearch
-from src.retrieval.reranker import Reranker
+from src.retrieval.hybrid_search_v2_clean import HybridSearchV2Clean  # ← UPDATED
 
 load_dotenv()
 
 
 class GeminiPolicyEngine:
-    """Main Policy Decision Engine - Uses Gemini (FREE)"""
+    """Main Policy Decision Engine - Uses Clean Hybrid Search"""
     
-    def __init__(self, model_name: str = "gemini-2.5-flash-preview-09-2025", use_reranking: bool = True):
-        print("🚀 Initializing Policy Engine...")
+    def __init__(self, model_name: str = "gemini-2.5-flash-preview-09-2025"):
+        print("🚀 Initializing Policy Engine (Clean Data)...")
         
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
@@ -40,43 +39,50 @@ class GeminiPolicyEngine:
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         
-        print("   Loading retrieval...")
-        self.hybrid_search = HybridSearch()
+        print("   Loading clean hybrid search (BM25 + Semantic + Reranking)...")
+        self.hybrid_search = HybridSearchV2Clean()  # ← UPDATED
         
-        self.use_reranking = use_reranking
-        if use_reranking:
-            print("   Loading reranker...")
-            self.reranker = Reranker()
-        
-        print("✅ Ready!")
+        print("✅ Ready with 341 clean chunks!")
     
     def retrieve_policies(self, query: str, top_k: int = 5) -> list:
-        """Retrieve relevant policies"""
-        candidate_k = top_k * 2 if self.use_reranking else top_k
-        candidates = self.hybrid_search.search(query, top_k=candidate_k)
+        """
+        Retrieve relevant policies using hybrid search
         
-        if self.use_reranking and self.reranker:
-            return self.reranker.rerank(query, candidates, top_k=top_k)
+        This already includes:
+        - BM25 keyword search
+        - Semantic search
+        - RRF fusion
+        - Cross-encoder reranking
         
-        return candidates[:top_k]
+        No need for separate reranker!
+        """
+        return self.hybrid_search.search(query, top_k=top_k)
     
     def calculate_confidence(self, retrieved_chunks: list, decision: Union[PolicyDecision, PolicyQuestion]) -> float:
-        """Calculate confidence score"""
+        """Calculate confidence score based on retrieval quality"""
         if not retrieved_chunks:
             return 0.0
         
-        retrieval_scores = [chunk.get('score', chunk.get('rerank_score', 0.0)) for chunk in retrieved_chunks[:3]]
+        # Get rerank scores from hybrid search
+        retrieval_scores = [
+            chunk.get('rerank_score', chunk.get('score', 0.0)) 
+            for chunk in retrieved_chunks[:3]
+        ]
+        
         avg_retrieval = sum(retrieval_scores) / len(retrieval_scores) if retrieval_scores else 0.0
         retrieval_factor = avg_retrieval * 0.4
         
+        # Decision clarity
         if isinstance(decision, PolicyDecision):
             clarity_factor = 0.3 * 0.3 if decision.decision == "unclear" else 0.8 * 0.3
         else:
             clarity_factor = 0.6 * 0.3
         
+        # Multi-source agreement
         high_score_count = sum(1 for score in retrieval_scores if score > 0.7)
         multi_source_factor = min(high_score_count / 3, 1.0) * 0.2
         
+        # LLM confidence
         llm_confidence = getattr(decision, 'confidence', 0.5) * 0.1
         
         total = retrieval_factor + clarity_factor + multi_source_factor + llm_confidence
@@ -84,13 +90,18 @@ class GeminiPolicyEngine:
     
     def review_ad(self, ad_text: str) -> PolicyDecision:
         """Review ad for policy compliance"""
-        print(f"\n🔍 Retrieving policies...")
+        print(f"\n🔍 Retrieving policies (hybrid search)...")
         policies = self.retrieve_policies(ad_text, top_k=5)
-        print(f"   Found {len(policies)} policies")
+        print(f"   Found {len(policies)} relevant policies")
+        
+        # Show retrieval quality
+        if policies:
+            top_score = policies[0].get('rerank_score', policies[0].get('score', 0))
+            print(f"   Top match score: {top_score:.4f}")
         
         prompts = format_policy_review_prompt(ad_text, policies)
         
-        print(f"🤖 Calling Gemini...")
+        print(f"🤖 Calling Gemini ({self.model_name})...")
         
         try:
             full_prompt = f"""{prompts["system"]}
@@ -141,6 +152,7 @@ Respond ONLY with valid JSON:
                 escalation_required=True
             )
         
+        # Calculate final confidence
         final_confidence = self.calculate_confidence(policies, decision)
         decision.confidence = final_confidence
         
@@ -154,7 +166,7 @@ Respond ONLY with valid JSON:
     def print_decision(self, decision: PolicyDecision):
         """Pretty print decision"""
         print("\n" + "=" * 80)
-        print("📋 POLICY DECISION")
+        print("📋 POLICY DECISION (Clean Hybrid Search)")
         print("=" * 80)
         print(f"\n🎯 Decision: {decision.decision.upper()}")
         print(f"📊 Confidence: {decision.confidence:.1%}")
@@ -172,3 +184,26 @@ Respond ONLY with valid JSON:
             print(f"\n🚨 ESCALATION REQUIRED")
         
         print("\n" + "=" * 80)
+
+
+def main():
+    """Test the engine"""
+    engine = GeminiPolicyEngine()
+    
+    test_ads = [
+        "Lose 15 pounds in one week with this miracle pill!",
+        "Learn cryptocurrency trading from certified instructors",
+        "Buy our new laptop - Intel i7, 16GB RAM"
+    ]
+    
+    for ad in test_ads:
+        print(f"\n\n{'='*80}")
+        print(f"Testing: {ad}")
+        print('='*80)
+        
+        decision = engine.review_ad(ad)
+        engine.print_decision(decision)
+
+
+if __name__ == "__main__":
+    main()

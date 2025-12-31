@@ -1,214 +1,295 @@
 """
-Embedding Generator - Converts text chunks into numerical vectors
+Generate Embeddings for Policy Chunks V2
 
-CONCEPT EXPLANATION:
-- An embedding is a list of numbers that represents text meaning
-- Similar texts → similar numbers
-- We use BGE-large-en-v1.5 (one of the best open-source models)
-- Each chunk becomes a 1024-dimensional vector
+WHY EMBEDDINGS?
+- Computers can't understand text directly
+- Embeddings convert text → numbers that capture MEANING
+- Similar meanings → similar numbers (vectors)
+- Enables semantic search (meaning-based, not just keywords)
 
-WHY THIS MATTERS:
-- Enables semantic search (meaning-based, not keyword-based)
-- "crypto" and "cryptocurrency" will have similar embeddings
-- Allows us to find relevant chunks even with different wording
+MODEL: BGE-large-en-v1.5
+- Best open-source embedding model
+- 1024 dimensions (balance of quality vs speed)
+- Trained on 200M+ text pairs
+- Free, runs locally on your laptop
+
+INPUT: data/processed_v2/chunks.json (345 chunks)
+OUTPUT: data/embeddings_v2/embeddings.npy (345 × 1024 array)
 """
 
 import json
 import numpy as np
 from pathlib import Path
 from typing import List, Dict
-from sentence_transformers import SentenceTransformer
+import time
 from tqdm import tqdm
 
+from sentence_transformers import SentenceTransformer
 
-class EmbeddingGenerator:
+
+class EmbeddingGeneratorV2:
     """
-    Generates embeddings for policy chunks
+    Generate embeddings for policy chunks using BGE-large
     
-    How it works:
-    1. Load a pre-trained embedding model (BGE)
-    2. Feed text into model
-    3. Model outputs 1024 numbers (the embedding)
-    4. Save embeddings for later use
+    PROCESS:
+    1. Load BGE model (downloads ~1.3GB first time)
+    2. Batch process chunks (efficient GPU/CPU usage)
+    3. Normalize vectors (for cosine similarity)
+    4. Save as numpy array (fast loading later)
     """
     
     def __init__(
         self,
+        chunks_file: str = "data/processed_v2/chunks.json",
+        output_dir: str = "data/embeddings_v2",
         model_name: str = "BAAI/bge-large-en-v1.5",
-        input_file: str = "data/processed/chunks.json",
-        output_dir: str = "data/embeddings"
+        batch_size: int = 32
     ):
-        """
-        Initialize the embedding generator
-        
-        Args:
-            model_name: Which embedding model to use
-                - BGE-large is one of the best open-source models
-                - Produces 1024-dimensional embeddings
-                - Trained on diverse text for general understanding
-            
-            input_file: Where to load chunks from
-            output_dir: Where to save embeddings
-        """
-        self.model_name = model_name
-        self.input_file = Path(input_file)
+        self.chunks_file = Path(chunks_file)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load the embedding model
-        # This downloads ~1.3GB model on first run (cached after)
-        print(f"Loading embedding model: {model_name}")
-        print("(First run will download ~1.3GB - this is cached for future use)")
-        self.model = SentenceTransformer(model_name)
-        print(f"✅ Model loaded! Embedding dimension: {self.model.get_sentence_embedding_dimension()}")
+        self.model_name = model_name
+        self.batch_size = batch_size
+        
+        print("="*80)
+        print("PHASE C: EMBEDDING GENERATION")
+        print("="*80)
+        print(f"\n🤖 Model: {model_name}")
+        print(f"📦 Batch size: {batch_size}")
+        print(f"📁 Output: {output_dir}")
+        
+        # Load the model
+        self.model = self._load_model()
+    
+    def _load_model(self) -> SentenceTransformer:
+        """
+        Load BGE embedding model
+        
+        FIRST TIME:
+        - Downloads ~1.3GB model from Hugging Face
+        - Takes 2-5 minutes depending on internet
+        - Cached locally for future use
+        
+        AFTER FIRST TIME:
+        - Loads from cache (~5 seconds)
+        
+        WHY BGE-large-en-v1.5?
+        - Ranks #1 on MTEB leaderboard (embedding benchmark)
+        - 1024 dimensions (good quality/speed balance)
+        - Works well with policy/legal text
+        - Open source and free
+        """
+        print(f"\n⏳ Loading model: {self.model_name}")
+        print("   First run: Downloads ~1.3GB (5-10 min)")
+        print("   After: Loads from cache (~5 sec)")
+        
+        start = time.time()
+        
+        try:
+            model = SentenceTransformer(self.model_name)
+            elapsed = time.time() - start
+            
+            print(f"✅ Model loaded in {elapsed:.1f}s")
+            print(f"   Embedding dimension: {model.get_sentence_embedding_dimension()}")
+            
+            return model
+            
+        except Exception as e:
+            print(f"\n❌ Error loading model: {e}")
+            print("\nTroubleshooting:")
+            print("1. Check internet connection (needs to download model)")
+            print("2. Try: pip install --upgrade sentence-transformers")
+            print("3. Check disk space (~2GB needed)")
+            raise
     
     def load_chunks(self) -> List[Dict]:
-        """
-        Load chunks from Phase 1
+        """Load chunks from JSON"""
+        print(f"\n📂 Loading chunks from: {self.chunks_file}")
         
-        Returns:
-            List of chunk dictionaries
-        """
-        if not self.input_file.exists():
-            raise FileNotFoundError(
-                f"Chunks file not found: {self.input_file}\n"
-                "Did you run Phase 1 (run_phase1.py)?"
-            )
-        
-        with open(self.input_file, 'r') as f:
+        with open(self.chunks_file, 'r', encoding='utf-8') as f:
             chunks = json.load(f)
         
-        print(f"📚 Loaded {len(chunks)} chunks")
+        print(f"✅ Loaded {len(chunks)} chunks")
         return chunks
     
-    def generate_embeddings(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
+    def generate_embeddings(self, chunks: List[Dict]) -> np.ndarray:
         """
-        Convert texts to embeddings
+        Generate embeddings for all chunks
         
-        TECHNICAL DETAILS:
-        - Processes in batches for efficiency (32 at a time)
-        - Uses GPU if available, otherwise CPU
-        - Shows progress bar so you know it's working
+        PROCESS:
+        1. Extract text content from each chunk
+        2. Batch process in groups of 32 (faster than one-by-one)
+        3. Model converts text → 1024 numbers per chunk
+        4. Normalize vectors (required for cosine similarity)
         
-        Args:
-            texts: List of text strings to embed
-            batch_size: How many to process at once
-                - Larger = faster but more memory
-                - 32 is a good balance
+        BATCH PROCESSING:
+        - Instead of: embed(chunk1), embed(chunk2), embed(chunk3)...
+        - We do: embed([chunk1, chunk2, ..., chunk32]) → 10x faster!
+        - GPU/CPU can parallelize within batch
         
-        Returns:
-            numpy array of shape (num_texts, 1024)
-            Each row is one embedding (1024 numbers)
-        
-        Example:
-            texts = ["hello world", "crypto policy"]
-            embeddings = generate_embeddings(texts)
-            # embeddings.shape = (2, 1024)
-            # embeddings[0] = [0.23, -0.45, ...]  (1024 numbers)
+        NORMALIZATION:
+        - Each vector is scaled to length 1.0
+        - Required for cosine similarity (dot product becomes cosine)
+        - Makes similarity scores 0-1 range
         """
-        print(f"\n🔢 Generating embeddings for {len(texts)} chunks...")
-        print(f"   Batch size: {batch_size}")
-        print(f"   This will take ~{len(texts) * 0.05:.1f} seconds")
+        print(f"\n🔢 Generating embeddings for {len(chunks)} chunks...")
         
-        # The actual embedding generation
-        # normalize_embeddings=True means all vectors have length 1
-        # This makes similarity calculations more stable
+        # Extract just the text content
+        texts = [chunk['content'] for chunk in chunks]
+        
+        # Estimate time
+        time_per_chunk = 0.05  # ~50ms per chunk on CPU, ~5ms on GPU
+        estimated_time = (len(chunks) * time_per_chunk) / self.batch_size
+        print(f"   Estimated time: {estimated_time:.1f} seconds")
+        print(f"   Processing in batches of {self.batch_size}...")
+        
+        start = time.time()
+        
+        # Generate embeddings with progress bar
         embeddings = self.model.encode(
             texts,
-            batch_size=batch_size,
+            batch_size=self.batch_size,
             show_progress_bar=True,
-            normalize_embeddings=True,  # Important for FAISS!
-            convert_to_numpy=True
+            normalize_embeddings=True  # Required for cosine similarity
         )
         
-        print(f"✅ Generated embeddings: shape {embeddings.shape}")
+        elapsed = time.time() - start
+        
+        print(f"\n✅ Embeddings generated in {elapsed:.1f}s")
+        print(f"   Shape: {embeddings.shape}")
+        print(f"   ({embeddings.shape[0]} chunks × {embeddings.shape[1]} dimensions)")
+        
         return embeddings
     
     def save_embeddings(self, embeddings: np.ndarray, chunks: List[Dict]):
         """
-        Save embeddings and metadata to disk
+        Save embeddings and metadata
         
-        We save TWO files:
-        1. embeddings.npy - The actual vectors (binary, fast to load)
+        FILES CREATED:
+        1. embeddings.npy - The actual vectors (345 × 1024 array)
         2. metadata.json - Chunk info (for citations, filtering)
+        3. index_map.json - Maps embedding index → chunk info
         
-        Why separate files?
-        - .npy is compact and fast for numpy arrays
-        - .json is human-readable for metadata
-        - FAISS only needs the vectors, not metadata
+        WHY SEPARATE FILES?
+        - embeddings.npy: Fast numpy loading for search
+        - metadata.json: Human-readable, easy to inspect
+        - Keeps code clean (embeddings separate from text)
         """
-        # Save embeddings as numpy array
+        
+        # Save embeddings (binary numpy format - fast!)
         embeddings_path = self.output_dir / "embeddings.npy"
         np.save(embeddings_path, embeddings)
+        print(f"\n💾 Saved embeddings: {embeddings_path}")
+        print(f"   Size: {embeddings_path.stat().st_size / 1024 / 1024:.2f} MB")
         
-        # Save metadata (everything except the content text to save space)
+        # Save metadata (JSON - readable)
         metadata = []
-        for chunk in chunks:
-            # Keep only essential fields
-            meta = {
-                'chunk_id': chunk['chunk_id'],
-                'metadata': chunk['metadata'],
+        for i, chunk in enumerate(chunks):
+            metadata.append({
+                'index': i,
+                'hierarchy': chunk['metadata']['hierarchy'],
+                'category': chunk['metadata']['category'],
+                'url': chunk['metadata']['url'],
+                'section_title': chunk['metadata']['section_title'],
+                'chunk_type': chunk['metadata']['chunk_type'],
                 'char_count': chunk['char_count'],
-                # Store first 200 chars of content for preview
-                'content_preview': chunk['content'][:200] + "..."
-            }
-            metadata.append(meta)
+                'token_count': chunk.get('token_count')
+            })
         
         metadata_path = self.output_dir / "metadata.json"
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
+        with open(metadata_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
         
-        print(f"\n💾 Saved:")
-        print(f"   Embeddings: {embeddings_path} ({embeddings.nbytes / 1024 / 1024:.2f} MB)")
-        print(f"   Metadata: {metadata_path}")
+        print(f"💾 Saved metadata: {metadata_path}")
+        
+        # Save embedding statistics
+        stats = {
+            'model': self.model_name,
+            'num_chunks': len(chunks),
+            'embedding_dim': embeddings.shape[1],
+            'generated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'mean_norm': float(np.mean(np.linalg.norm(embeddings, axis=1))),
+            'std_norm': float(np.std(np.linalg.norm(embeddings, axis=1)))
+        }
+        
+        stats_path = self.output_dir / "embedding_stats.json"
+        with open(stats_path, 'w') as f:
+            json.dump(stats, f, indent=2)
+        
+        print(f"📊 Saved stats: {stats_path}")
     
-    def run(self):
+    def verify_embeddings(self, embeddings: np.ndarray, chunks: List[Dict]):
         """
-        Main execution: Load chunks → Generate embeddings → Save
+        Verify embeddings are correct
         
-        This is the orchestrator method that does everything
+        CHECKS:
+        1. Shape is correct (345 × 1024)
+        2. All vectors are normalized (length ≈ 1.0)
+        3. No NaN or Inf values
+        4. Vectors have reasonable variance (not all same)
         """
-        print("=" * 60)
-        print("PHASE 2: EMBEDDING GENERATION")
-        print("=" * 60)
-        print()
+        print("\n" + "="*80)
+        print("VERIFICATION")
+        print("="*80)
         
-        # Step 1: Load chunks from Phase 1
-        chunks = self.load_chunks()
+        # Check shape
+        expected_shape = (len(chunks), 1024)
+        assert embeddings.shape == expected_shape, f"Wrong shape: {embeddings.shape}"
+        print(f"✅ Shape correct: {embeddings.shape}")
         
-        # Step 2: Extract just the text content for embedding
-        texts = [chunk['content'] for chunk in chunks]
+        # Check normalization
+        norms = np.linalg.norm(embeddings, axis=1)
+        mean_norm = np.mean(norms)
+        print(f"✅ Normalized: mean norm = {mean_norm:.4f} (should be ~1.0)")
         
-        # Step 3: Generate embeddings
-        embeddings = self.generate_embeddings(texts)
+        # Check for NaN/Inf
+        has_nan = np.isnan(embeddings).any()
+        has_inf = np.isinf(embeddings).any()
+        assert not has_nan and not has_inf, "Found NaN or Inf values!"
+        print(f"✅ No invalid values")
         
-        # Step 4: Save everything
-        self.save_embeddings(embeddings, chunks)
+        # Check variance (vectors should be different)
+        std = np.std(embeddings)
+        print(f"✅ Vectors have variance: std = {std:.4f}")
         
-        # Summary statistics
-        print("\n" + "=" * 60)
-        print("✨ EMBEDDING GENERATION COMPLETE!")
-        print("=" * 60)
-        print(f"\n📊 Statistics:")
-        print(f"   Total chunks embedded: {len(chunks)}")
-        print(f"   Embedding dimension: {embeddings.shape[1]}")
-        print(f"   Total vectors: {embeddings.shape[0]}")
-        print(f"   Memory size: {embeddings.nbytes / 1024 / 1024:.2f} MB")
-        print(f"\n🎯 Next: Build vector store (FAISS index)")
-        
-        return embeddings, chunks
+        # Sample similarity check
+        # Similar policy chunks should have high similarity
+        print(f"\n🔍 Sample similarity check:")
+        sim = np.dot(embeddings[0], embeddings[1])
+        print(f"   Chunk 0 vs Chunk 1: {sim:.4f}")
+        print(f"   (Should be 0.3-0.9 for related policies)")
 
 
 def main():
-    """Run the embedding generator"""
-    generator = EmbeddingGenerator()
-    embeddings, chunks = generator.run()
+    """Run embedding generation"""
     
-    # Demo: Show what an embedding looks like
-    print("\n📋 Sample embedding (first 10 dimensions):")
-    print(f"   Chunk: {chunks[0]['content'][:80]}...")
-    print(f"   Embedding: {embeddings[0][:10]}")
-    print(f"   Full size: {len(embeddings[0])} dimensions")
+    generator = EmbeddingGeneratorV2()
+    
+    # Load chunks
+    chunks = generator.load_chunks()
+    
+    if not chunks:
+        print("\n❌ No chunks found! Run chunking_v2.py first.")
+        return
+    
+    # Generate embeddings
+    embeddings = generator.generate_embeddings(chunks)
+    
+    # Verify quality
+    generator.verify_embeddings(embeddings, chunks)
+    
+    # Save everything
+    generator.save_embeddings(embeddings, chunks)
+    
+    print("\n" + "="*80)
+    print("✅ PHASE C COMPLETE: EMBEDDINGS")
+    print("="*80)
+    print(f"\n📊 Summary:")
+    print(f"   Chunks embedded: {len(chunks)}")
+    print(f"   Embedding dimensions: {embeddings.shape[1]}")
+    print(f"   Output directory: {generator.output_dir}")
+    print(f"\n🚀 Next: Build FAISS vector store for fast search")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+query,expected,actual,correct,confidence,has_citation,latency
+Lose 15 pounds in one week with this miracle pill!,disallowed,disallowed,True,0.330237928959541,True,67.69205498695374
+Learn cryptocurrency trading from certified instru,restricted,restricted,True,0.34006634005597636,True,43.111199140548706
+"Buy smartphone - 5G, 128GB. Free shipping over $50",allowed,allowed,True,0.34020398535610485,True,41.38742208480835
+Guaranteed 20% returns on investment - no risk!,disallowed,disallowed,True,0.3401264144356052,True,44.18226099014282
+Cure cancer naturally with our herbal supplement,disallowed,unclear,False,0.1900537186434182,True,32.706942081451416
+Vote for John Smith - Political campaign ad,restricted,unclear,False,0.18810626824696858,True,30.413662910461426
+Buy our organic coffee beans - ethically sourced,allowed,allowed,True,0.3400318436175197,True,28.460147857666016
+Get rich quick with this secret trading system!,disallowed,disallowed,True,0.33508032695914153,True,28.351742267608643

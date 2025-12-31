@@ -1,0 +1,20 @@
+{
+  "retrieval": {
+    "Dense Only": {
+      "Recall@5": "100.0%",
+      "MRR": "0.750"
+    },
+    "Hybrid": {
+      "Recall@5": "100.0%",
+      "MRR": "0.750"
+    }
+  },
+  "generation": {
+    "Decision Accuracy": "75.0%",
+    "Avg Confidence": "30.0%",
+    "Citation Rate": "100.0%",
+    "Avg Latency": "39.54s",
+    "P50 Latency": "41.39s",
+    "P95 Latency": "67.69s"
+  }
+}
