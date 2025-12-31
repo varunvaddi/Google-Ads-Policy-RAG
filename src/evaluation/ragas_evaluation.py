@@ -288,10 +288,16 @@ class RAGEvaluator:
         print(f"   Confidence: {decision_metrics['avg_confidence']:.1%}")
         
         # Save results
-        output_path = Path('evaluation_results.json')
+        # Save results
+        base_dir = Path(__file__).parent
+        output_path = base_dir.parent.parent / "evaluation" / "evaluation_results.json"
+
+        # Ensure directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         with open(output_path, 'w') as f:
             json.dump(all_metrics, f, indent=2)
-        
+
         print(f"\n💾 Results saved to: {output_path}")
         
         return all_metrics
