@@ -1,7 +1,6 @@
 """
 Google Ads Policy RAG System - Gradio Demo
 HuggingFace Spaces Deployment
-Integrated with actual project structure
 """
 
 import gradio as gr
@@ -17,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import your actual components
 from src.retrieval.hybrid_search import HybridSearch
 from src.generation.decision_engine import DecisionEngine
-from src.generation.decision_schema import PolicyDecision
 
 class RAGSystem:
     """Main RAG system interface"""
@@ -27,15 +25,11 @@ class RAGSystem:
         print("🚀 Loading RAG system...")
         
         try:
-            # Initialize your hybrid search (BM25 + FAISS + Reranker)
-            self.retriever = HybridSearch(
-                faiss_index_path='data/embeddings/faiss_index.index',
-                chunks_path='data/embeddings/chunks.json',  # or .pkl
-                bm25_index_path='data/embeddings/bm25_index.pkl'
-            )
+            # Initialize your hybrid search
+            self.retriever = HybridSearch()
             print("✅ Retrieval system loaded")
             
-            # Initialize your decision engine (Gemini + Pydantic)
+            # Initialize your decision engine
             api_key = os.getenv('GOOGLE_API_KEY')
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY not found in environment variables")
@@ -50,42 +44,32 @@ class RAGSystem:
             raise
         
     def process_query(self, query: str) -> Dict:
-        """
-        Process a query through the RAG pipeline
-        
-        Args:
-            query: User's ad text or policy question
-            
-        Returns:
-            Dictionary with decision, confidence, citations, etc.
-        """
+        """Process a query through the RAG pipeline"""
         start_time = time.time()
         
         try:
-            # 1. Retrieval phase - Use your hybrid search
-            retrieved_chunks = self.retriever.search(
-                query=query,
-                top_k=5  # Get top 5 after reranking
-            )
+            # 1. Retrieval phase
+            retrieved_chunks = self.retriever.search(query, top_k=5)
             
-            # 2. Generation phase - Use your decision engine
-            decision = self.generator.generate_decision(
-                query=query,
-                context_chunks=retrieved_chunks
-            )
+            # 2. Generation phase
+            decision = self.generator.generate_decision(query, retrieved_chunks)
             
             # 3. Format response
             result = {
-                'decision': decision.decision,  # APPROVE/REJECT/NEEDS_REVIEW
+                'decision': decision.decision.upper(),
                 'confidence': decision.confidence,
-                'reasoning': decision.reasoning,
-                'risk_factors': decision.risk_factors,
-                'recommendations': decision.recommendations if hasattr(decision, 'recommendations') else [],
+                'reasoning': decision.justification,
+                'policy_section': decision.policy_section,
+                'policy_quote': decision.policy_quote,
+                'citation_url': decision.citation_url,
+                'risk_factors': decision.risk_factors or [],
+                'escalation_required': decision.escalation_required,
                 'citations': [
                     {
-                        'text': chunk.get('text', chunk.get('content', '')),
-                        'source': chunk.get('source', chunk.get('metadata', {}).get('source', 'Unknown')),
-                        'score': chunk.get('score', chunk.get('rerank_score', 0.0))
+                        'text': chunk['content'][:300],
+                        'source': ' > '.join(chunk['metadata']['hierarchy']),
+                        'url': chunk['metadata']['url'],
+                        'score': chunk.get('rerank_score', chunk.get('score', 0.0))
                     }
                     for chunk in retrieved_chunks
                 ],
@@ -96,12 +80,17 @@ class RAGSystem:
             
         except Exception as e:
             print(f"Error processing query: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 'decision': 'ERROR',
                 'confidence': 0.0,
                 'reasoning': f'System error: {str(e)}',
+                'policy_section': 'N/A',
+                'policy_quote': '',
+                'citation_url': '',
                 'risk_factors': [],
-                'recommendations': ['Please try again or contact support'],
+                'escalation_required': True,
                 'citations': [],
                 'latency': round(time.time() - start_time, 2)
             }
@@ -119,21 +108,13 @@ def create_demo_interface():
         system_ready = False
     
     def process_and_format(query: str) -> Tuple[str, str, str, str]:
-        """
-        Process query and format results for Gradio
-        
-        Returns:
-            Tuple of (decision_html, reasoning, citations_html, metrics_html)
-        """
+        """Process query and format results for Gradio"""
         if not system_ready:
             error_html = """
             <div style="padding: 20px; border-radius: 10px; background: #ffebee;">
                 <h2 style="margin: 0; color: #c62828;">⚠️ System Error</h2>
                 <p style="margin: 10px 0 0 0;">
-                    RAG system failed to initialize. Please check logs and ensure:
-                    <br>• GOOGLE_API_KEY is set in environment
-                    <br>• Data files exist in data/embeddings/
-                    <br>• All dependencies are installed
+                    RAG system failed to initialize. Please check logs.
                 </p>
             </div>
             """
@@ -147,21 +128,25 @@ def create_demo_interface():
         
         # Format decision
         decision_colors = {
-            'REJECT': 'red',
-            'APPROVE': 'green',
-            'NEEDS_REVIEW': 'orange',
+            'DISALLOWED': 'red',
+            'ALLOWED': 'green',
+            'RESTRICTED': 'orange',
+            'UNCLEAR': 'gray',
             'ERROR': 'gray'
         }
         decision_icons = {
-            'REJECT': '❌',
-            'APPROVE': '✅',
-            'NEEDS_REVIEW': '⚠️',
+            'DISALLOWED': '❌',
+            'ALLOWED': '✅',
+            'RESTRICTED': '⚠️',
+            'UNCLEAR': '❓',
             'ERROR': '⚠️'
         }
         
         decision = result['decision']
         color = decision_colors.get(decision, 'gray')
         icon = decision_icons.get(decision, '?')
+        
+        escalation = "🚨 Human Review Required" if result.get('escalation_required') else ""
         
         decision_html = f"""
         <div style="padding: 20px; border-radius: 10px; background: linear-gradient(135deg, #{color}33, #{color}22);">
@@ -171,23 +156,24 @@ def create_demo_interface():
             <p style="margin: 10px 0 0 0; font-size: 18px;">
                 Confidence: <strong>{result['confidence']:.0%}</strong>
             </p>
+            {f'<p style="margin: 10px 0 0 0; color: #d32f2f; font-weight: bold;">{escalation}</p>' if escalation else ''}
         </div>
         """
         
         # Format reasoning
-        reasoning = result['reasoning']
+        reasoning = f"**Policy Section:** {result['policy_section']}\n\n"
+        reasoning += f"**Justification:**\n{result['reasoning']}\n\n"
         
-        # Format risk factors
+        if result.get('policy_quote'):
+            reasoning += f"**Policy Quote:**\n> {result['policy_quote']}\n\n"
+        
+        if result.get('citation_url'):
+            reasoning += f"**Official Policy:** [{result['citation_url']}]({result['citation_url']})\n\n"
+        
         if result.get('risk_factors'):
-            reasoning += "\n\n**🚨 Risk Factors:**\n"
+            reasoning += "**🚨 Risk Factors:**\n"
             for risk in result['risk_factors']:
                 reasoning += f"- {risk}\n"
-        
-        # Format recommendations
-        if result.get('recommendations'):
-            reasoning += "\n\n**💡 Recommendations:**\n"
-            for rec in result['recommendations']:
-                reasoning += f"- {rec}\n"
         
         # Format citations
         citations_html = "<h3>📚 Supporting Evidence</h3>"
@@ -196,7 +182,8 @@ def create_demo_interface():
             <div style="margin: 10px 0; padding: 15px; background: #f5f5f5; border-left: 4px solid #4CAF50; border-radius: 5px;">
                 <p style="margin: 0; font-weight: bold; color: #333;">Citation {i} (Score: {citation['score']:.3f})</p>
                 <p style="margin: 5px 0; color: #666; font-style: italic; font-size: 0.9em;">{citation['source']}</p>
-                <p style="margin: 5px 0; color: #333; font-size: 0.95em;">{citation['text'][:200]}...</p>
+                <p style="margin: 5px 0; color: #333; font-size: 0.95em;">{citation['text']}...</p>
+                <a href="{citation['url']}" target="_blank" style="font-size: 0.85em; color: #1976d2;">View Policy →</a>
             </div>
             """
         
@@ -220,38 +207,19 @@ def create_demo_interface():
         
         return decision_html, reasoning, citations_html, metrics_html
     
-    # Example queries for recruiters to try
+    # Example queries
     examples = [
         ["I want to advertise prescription pain medication online"],
         ["Offering personal loans with no credit check required"],
         ["Free trial for our premium software product - cancel anytime"],
         ["Investment opportunity with guaranteed 20% annual returns"],
-        ["Medical device that naturally cures diabetes without medication"],
-        ["Limited time offer: Buy one get one free on all products"],
-        ["Are tobacco products allowed in Google Ads?"],
         ["Can I advertise alcohol delivery services?"]
     ]
     
-    # Custom CSS for better appearance
-    custom_css = """
-    .gradio-container {
-        font-family: 'Arial', sans-serif;
-    }
-    .header {
-        text-align: center;
-        padding: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-    """
-    
     # Create interface
-    with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
-        # Header
+    with gr.Blocks(theme=gr.themes.Soft()) as demo:
         gr.HTML("""
-        <div class="header">
+        <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; margin-bottom: 20px;">
             <h1 style="margin: 0; font-size: 2.5em;">🔍 Google Ads Policy RAG System</h1>
             <p style="margin: 10px 0 0 0; font-size: 1.2em;">Production-Grade AI for Policy Compliance</p>
             <div style="margin-top: 15px; display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
@@ -263,48 +231,35 @@ def create_demo_interface():
         </div>
         """)
         
-        # System Status
         if system_ready:
             gr.Markdown("✅ **System Status:** Ready")
         else:
-            gr.Markdown("❌ **System Status:** Initialization Failed - Check logs")
+            gr.Markdown("❌ **System Status:** Initialization Failed")
         
-        # Description
         gr.Markdown("""
         ## How It Works
         
-        This system uses **hybrid retrieval** (BM25 + Dense Embeddings) combined with **cross-encoder reranking** 
-        and **Google Gemini** to make accurate policy decisions. All decisions are backed by citations from official 
-        Google Ads policies.
+        This system uses **hybrid retrieval** (BM25 + Dense Embeddings) with **cross-encoder reranking** 
+        and **Google Gemini** to make accurate policy decisions with full citations.
         
         ### 🎯 Try It Out
-        Enter your ad text or ask a policy question below:
         """)
         
-        # Input section
         with gr.Row():
-            with gr.Column(scale=2):
-                query_input = gr.Textbox(
-                    label="Ad Text or Policy Question",
-                    placeholder="e.g., 'Can I advertise prescription medication?' or paste your ad text",
-                    lines=3
-                )
-                submit_btn = gr.Button("🔍 Analyze", variant="primary", size="lg")
+            query_input = gr.Textbox(
+                label="Ad Text or Policy Question",
+                placeholder="e.g., 'Can I advertise prescription medication?'",
+                lines=3
+            )
         
-        # Examples
-        gr.Examples(
-            examples=examples,
-            inputs=query_input,
-            label="📝 Example Queries"
-        )
+        submit_btn = gr.Button("🔍 Analyze", variant="primary", size="lg")
         
-        # Output section
+        gr.Examples(examples=examples, inputs=query_input)
+        
         gr.Markdown("## 📊 Results")
         
-        with gr.Row():
-            with gr.Column(scale=1):
-                decision_output = gr.HTML(label="Decision")
-            
+        decision_output = gr.HTML(label="Decision")
+        
         with gr.Row():
             with gr.Column(scale=2):
                 reasoning_output = gr.Markdown(label="Analysis")
@@ -313,67 +268,20 @@ def create_demo_interface():
         
         metrics_output = gr.HTML(label="System Metrics")
         
-        # Connect the button
         submit_btn.click(
             fn=process_and_format,
             inputs=query_input,
             outputs=[decision_output, reasoning_output, citations_output, metrics_output]
         )
-        
-        # Architecture section
-        gr.Markdown("""
-        ---
-        ## 🏗️ System Architecture
-        
-        **Pipeline:**
-        1. **Data Ingestion**: 25 policy pages → 341 clean chunks (40s)
-        2. **Vector Generation**: BGE-large embeddings, 1024-dim (24s)  
-        3. **Hybrid Search**: FAISS + BM25 + RRF fusion (<1s)
-        4. **Reranking**: Cross-encoder (BGE-reranker-large) 
-        5. **Generation**: Google Gemini 2.5 Flash + Pydantic (2-3s)
-        
-        **Tech Stack:**
-        - Embeddings: BGE-large-en-v1.5
-        - Vector DB: FAISS FlatIP
-        - Keyword: BM25Okapi  
-        - Reranking: BGE-reranker-large
-        - LLM: Google Gemini 2.5 Flash
-        - Validation: Pydantic v2.5
-        
-        **Performance:**
-        - ✅ 80% Decision Accuracy
-        - ✅ 78% Retrieval Recall@5
-        - ✅ 0.778 MRR (Mean Reciprocal Rank)
-        - ✅ <3s Query Latency
-        - ✅ Zero Hallucinations (100% citations)
-        - ✅ $0 Infrastructure Cost
-        """)
-        
-        # Footer
-        gr.HTML("""
-        <div style="text-align: center; padding: 20px; color: #666; margin-top: 30px; border-top: 1px solid #ddd;">
-            <p style="margin: 5px 0;">
-                <strong>Built by:</strong> [Your Name] | 
-                <a href="https://github.com/yourusername/google-ads-policy-rag" target="_blank">GitHub</a> | 
-                <a href="https://linkedin.com/in/yourprofile" target="_blank">LinkedIn</a>
-            </p>
-            <p style="margin: 5px 0; font-size: 0.9em;">
-                Production-ready RAG system • Python • BGE • FAISS • Gemini
-            </p>
-        </div>
-        """)
     
     return demo
 
 
 if __name__ == "__main__":
-    # Create and launch the demo
     demo = create_demo_interface()
-    
-    # Launch with public sharing enabled
     demo.launch(
-        share=False,  # Set to False for HuggingFace Spaces (automatic)
-        server_name="0.0.0.0",  # Required for HuggingFace
-        server_port=7860,  # Default Gradio port
+        share=False,
+        server_name="0.0.0.0",
+        server_port=7860,
         show_error=True
     )
