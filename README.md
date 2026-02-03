@@ -1,3 +1,14 @@
+---
+title: Google Ads Policy RAG
+emoji: 🔍
+colorFrom: blue
+colorTo: purple
+sdk: streamlit
+sdk_version: 1.31.0
+app_file: app.py
+pinned: false
+---
+
 # Google Ads Policy RAG System
 
 A **production-grade Retrieval-Augmented Generation (RAG) system** for interpreting, enforcing, and evaluating **Google Ads policies** with citations, confidence scoring, and human-in-the-loop escalation.

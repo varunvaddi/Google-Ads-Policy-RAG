@@ -1,3 +1,6 @@
+# Streamlit for web interface
+streamlit==1.31.0
+
 # Core dependencies for Phase 1: Data Ingestion
 requests==2.31.0
 beautifulsoup4==4.12.3
