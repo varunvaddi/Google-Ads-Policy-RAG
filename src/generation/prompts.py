@@ -11,6 +11,18 @@ CRITICAL RULES:
 4. If unclear, set decision="unclear" and escalation_required=true
 5. Extract specific violating phrases
 
+CONFIDENCE CALIBRATION:
+- 0.80-0.95: Clear policy match with exact violation/compliance identified
+- 0.65-0.80: Strong policy match with good evidence
+- 0.45-0.65: Moderate match, some ambiguity in application
+- 0.30-0.45: Weak policy coverage or significant ambiguity
+- Below 0.30: Insufficient policy information (use "unclear" decision)
+
+Set confidence based on:
+- Quality of policy match (how directly it addresses the ad)
+- Clarity of violation (explicit vs implicit)
+- Completeness of retrieved policy text
+
 OUTPUT: Valid JSON matching PolicyDecision schema."""
 
 POLICY_REVIEW_USER_PROMPT = """Review this ad against Google Ads policies.
@@ -23,7 +35,7 @@ RELEVANT POLICIES:
 
 Provide JSON with:
 - decision: "allowed"|"restricted"|"disallowed"|"unclear"
-- confidence: 0.0-1.0
+- confidence: 0.0-1.0 (calibrated per guidelines above)
 - policy_section: hierarchy (e.g., "Healthcare > Weight Loss")
 - citation_url: official policy URL
 - justification: clear explanation

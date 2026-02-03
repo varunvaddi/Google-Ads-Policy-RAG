@@ -89,30 +89,98 @@ class HybridSearch:
         """Rerank using cross-encoder"""
         
         pairs = [[query, candidate['content']] for candidate in candidates]
-        scores = self.reranker.predict(pairs)
-        sorted_indices = np.argsort(scores)[::-1][:top_k]
+        raw_scores = self.reranker.predict(pairs)
+        # Combine rerank scores with policy boost
+        combined_scores = []
+        for i, (raw_score, candidate) in enumerate(zip(raw_scores, candidates)):
+            policy_boost = candidate.get('policy_boost', 0.0)
+            
+            # Add boost as a bonus to raw score
+            # Boost value of 1.0 adds 0.001 to score (10x typical score range)
+            combined_score = raw_score + (policy_boost * 0.001)
+            combined_scores.append(combined_score)
+        
+        combined_scores = np.array(combined_scores)
+        sorted_indices = np.argsort(combined_scores)[::-1][:top_k]
         
         reranked = []
         for new_rank, idx in enumerate(sorted_indices, 1):
             candidate = candidates[idx].copy()
             candidate['rank'] = new_rank
-            candidate['rerank_score'] = float(scores[idx])
+            candidate['rerank_score'] = float(raw_scores[idx])  # Keep raw score
+            candidate['combined_score'] = float(combined_scores[idx])
             reranked.append(candidate)
         
         return reranked
     
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
-        """Full hybrid search pipeline"""
+        """Full hybrid search pipeline"""    
+    
+        # Query expansion for common patterns
+        expanded_query = query
+        query_lower = query.lower()
         
-        bm25_results = self.bm25.search(query, top_k=20)
-        semantic_results = self.semantic.search(query, top_k=20)
+        # Financial guarantees → unreliable claims
+        if any(word in query_lower for word in ['guarantee', 'promised', '100%']) and \
+        any(word in query_lower for word in ['return', 'profit', 'income', 'earning']):
+            expanded_query = query + " unreliable claims improbable result inaccurate misrepresentation"
+        
+        # Use expanded query
+        bm25_results = self.bm25.search(expanded_query, top_k=30)
+        semantic_results = self.semantic.search(expanded_query, top_k=30)
+        
         merged_results = self.reciprocal_rank_fusion(bm25_results, semantic_results)
-        final_results = self.rerank(query, merged_results, top_k=top_k)
+        
+        # Pattern detection with sets (cleaner)
+        financial_terms = {'return', 'returns', 'profit', 'income', '%', 'apy', 'apr'}
+        guarantee_terms = {'guarantee', 'guaranteed', 'promised', 'certain', 'sure', 'risk-free', 'no risk'}
+        
+        query_words = set(query_lower.split())
+        financial_guarantee = (
+            any(term in query_lower for term in guarantee_terms) and
+            any(term in query_lower for term in financial_terms)
+        )
+        
+        # Apply policy boost (not rank hacking)
+        if financial_guarantee:
+            print("   🎯 Detected financial guarantee claim — boosting Misrepresentation policies")
+            
+            boosted_count = 0
+            for result in merged_results:
+                hierarchy = ' > '.join(result['metadata']['hierarchy'])
+                
+                # Boost relevant policy types
+                if any(keyword in hierarchy for keyword in ['Misrepresentation', 'Unreliable', 'Unacceptable business']):
+                    result['policy_boost'] = 1.0
+                    boosted_count += 1
+                else:
+                    result['policy_boost'] = 0.0
+            print(f"   → Boosted {boosted_count} policies in merged results")
+        else:
+            # No boost needed
+            for result in merged_results:
+                result['policy_boost'] = 0.0
+        
+        # Sort by boost (boosted items go to top for reranker to see)
+        merged_results.sort(
+            key=lambda x: x.get('policy_boost', 0.0),
+            reverse=True
+        )
+        # Show top 5 after boost sort
+        print(f"   Top 5 after boost:")
+        for i, r in enumerate(merged_results[:5], 1):
+            h = ' > '.join(r['metadata']['hierarchy'])
+            print(f"     {i}. {h[:60]}... (boost: {r.get('policy_boost', 0)})")
+        # Reranker still makes final decision on ordering
+        final_results = self.rerank(query, merged_results[:20], top_k=top_k)
         
         return final_results
+
+        
     
     def print_results(self, results: List[Dict], query: str = ""):
         """Pretty print results"""
+
         print("\n" + "="*80)
         print("HYBRID SEARCH RESULTS - CLEAN DATA")
         if query:
@@ -124,7 +192,7 @@ class HybridSearch:
             
             print(f"\n🏆 Rank #{result['rank']} | Score: {result['rerank_score']:.4f}")
             print(f"📂 {hierarchy}")
-            print(f"�� {result['metadata']['url']}")
+            print(f"🌐 {result['metadata']['url']}")
             print(f"\n💬 {result['content'][:250]}...")
             print()
 

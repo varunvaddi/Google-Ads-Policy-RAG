@@ -63,27 +63,45 @@ class GeminiPolicyEngine:
         if not retrieved_chunks:
             return 0.0
         
-        # Get rerank scores from hybrid search
-        retrieval_scores = [
-            chunk.get('rerank_score', chunk.get('score', 0.0)) 
-            for chunk in retrieved_chunks[:3]
-        ]
+        # Get raw rerank scores
+        scores = [chunk.get('rerank_score', 0.0) for chunk in retrieved_chunks[:5]]
         
-        avg_retrieval = sum(retrieval_scores) / len(retrieval_scores) if retrieval_scores else 0.0
-        retrieval_factor = avg_retrieval * 0.4
+        if len(scores) < 2:
+            retrieval_factor = 0.5  # Single result, moderate confidence
+        else:
+            # Use rank + margin (best practice for BGE reranker)
+            top_score = scores[0]
+            second_score = scores[1]
+            margin = top_score - second_score
+            
+            # High margin = clear winner = high confidence
+            if margin > 0.002:
+                retrieval_factor = 0.8
+            elif margin > 0.001:
+                retrieval_factor = 0.65
+            elif margin > 0.0005:
+                retrieval_factor = 0.5
+            else:
+                retrieval_factor = 0.35  # Low margin = uncertain
+            
+            # Boost if top score is absolutely high
+            if top_score > 0.003:
+                retrieval_factor = min(1.0, retrieval_factor + 0.1)
+        
+        retrieval_factor *= 0.25  # Apply weight
         
         # Decision clarity
         if isinstance(decision, PolicyDecision):
-            clarity_factor = 0.3 * 0.3 if decision.decision == "unclear" else 0.8 * 0.3
+            clarity_factor = 0.3 * 0.25 if decision.decision == "unclear" else 0.8 * 0.25
         else:
-            clarity_factor = 0.6 * 0.3
+            clarity_factor = 0.6 * 0.25
         
-        # Multi-source agreement
-        high_score_count = sum(1 for score in retrieval_scores if score > 0.7)
-        multi_source_factor = min(high_score_count / 3, 1.0) * 0.2
+        # Multi-source: Check if multiple high-margin results
+        high_quality_count = sum(1 for s in scores[:3] if s > 0.002)
+        multi_source_factor = (high_quality_count / 3) * 0.15
         
-        # LLM confidence
-        llm_confidence = getattr(decision, 'confidence', 0.5) * 0.1
+        # LLM confidence (highest weight)
+        llm_confidence = getattr(decision, 'confidence', 0.5) * 0.35
         
         total = retrieval_factor + clarity_factor + multi_source_factor + llm_confidence
         return max(0.0, min(1.0, total))
@@ -98,6 +116,15 @@ class GeminiPolicyEngine:
         if policies:
             top_score = policies[0].get('rerank_score', policies[0].get('score', 0))
             print(f"   Top match score: {top_score:.4f}")
+
+            # DEBUG: Show all scores
+            all_scores = [p.get('rerank_score', p.get('score', 0)) for p in policies[:5]]
+            print(f"   All top 5 scores: {all_scores}")
+
+            # DEBUG: Show what was retrieved
+            for i, p in enumerate(policies[:3], 1):
+                hierarchy = " > ".join(p['metadata']['hierarchy'])
+                print(f"   {i}. {hierarchy[:80]}... (score: {p.get('rerank_score', 0):.4f})")
         
         prompts = format_policy_review_prompt(ad_text, policies)
         
