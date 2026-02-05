@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Union
-from google import genai
+from google.genai import genai
 from google.genai import types
 from dotenv import load_dotenv
 
@@ -108,6 +108,7 @@ class GeminiPolicyEngine:
     
     def review_ad(self, ad_text: str) -> PolicyDecision:
         """Review ad for policy compliance"""
+
         print(f"\n🔍 Retrieving policies (hybrid search)...")
         policies = self.retrieve_policies(ad_text, top_k=5)
         print(f"   Found {len(policies)} relevant policies")
@@ -116,20 +117,11 @@ class GeminiPolicyEngine:
         if policies:
             top_score = policies[0].get('rerank_score', policies[0].get('score', 0))
             print(f"   Top match score: {top_score:.4f}")
-
-            # DEBUG: Show all scores
-            all_scores = [p.get('rerank_score', p.get('score', 0)) for p in policies[:5]]
-            print(f"   All top 5 scores: {all_scores}")
-
-            # DEBUG: Show what was retrieved
-            for i, p in enumerate(policies[:3], 1):
-                hierarchy = " > ".join(p['metadata']['hierarchy'])
-                print(f"   {i}. {hierarchy[:80]}... (score: {p.get('rerank_score', 0):.4f})")
         
         prompts = format_policy_review_prompt(ad_text, policies)
         
         print(f"🤖 Calling Gemini ({self.model_name})...")
-        
+                        
         try:
             full_prompt = f"""{prompts["system"]}
 
@@ -166,6 +158,19 @@ Respond ONLY with valid JSON:
             
             decision_dict = json.loads(response_text)
             decision = PolicyDecision(**decision_dict)
+
+            # 🔐 POLICY-AWARE DECISION OVERRIDE (CRITICAL FIX)
+            if policies:
+                top_policy = policies[0]
+                policy_path = top_policy.get("policy_path", "")
+                policy_path_lower = policy_path.lower() if policy_path else ""
+
+                if "prohibited content" in policy_path_lower or "prohibited practices" in policy_path_lower:
+                    decision.decision = "disallowed"
+
+                elif "restricted content" in policy_path_lower:
+                    # Do NOT allow LLM to escalate restricted → disallowed
+                    decision.decision = "restricted"
             
         except Exception as e:
             print(f"❌ Error: {e}")
