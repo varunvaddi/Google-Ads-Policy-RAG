@@ -70,4 +70,4 @@ Thumbs.db
 # Keep directory structure but ignore contents
 !data/raw/.gitkeep
 !data/processed/.gitkeep
-!data/embeddings/.gitkeep
+!data/embeddings/.gitkeepdata/
