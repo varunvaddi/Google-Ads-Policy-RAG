@@ -81,6 +81,7 @@ st.markdown('<div class="sub-header">AI-Powered Ad Policy Review with Citations<
 # ===============================
 with st.sidebar:
     st.header("📊 System Info")
+
     st.markdown("""
     **Architecture**
     - Vector Search (BGE + FAISS)
@@ -88,6 +89,7 @@ with st.sidebar:
     - Cross-Encoder Reranking
     - Gemini 2.5 Flash
     """)
+
     st.metric("Accuracy", "80%")
     st.metric("Latency", "~10s")
     st.metric("Chunks", "341")
@@ -103,9 +105,11 @@ tab1, tab2, tab3 = st.tabs(["🧪 Ad Review", "📚 Example Cases", "📈 System
 with tab1:
     st.header("Ad Policy Review")
 
+    # ---- Session State Init ----
     if "ad_text" not in st.session_state:
         st.session_state.ad_text = ""
 
+    # ---- Callback ----
     def set_example(text):
         st.session_state.ad_text = text
 
@@ -120,40 +124,40 @@ with tab1:
             key="ad_text"
         )
 
-    # ---- Example Buttons ----
+    # ---- Example Buttons (FIXED) ----
     with col2:
         st.markdown("### Quick Examples")
-        st.button("🏥 Health Claim", on_click=set_example, args=("Lose 15 pounds in one week with this miracle pill!",))
-        st.button("💰 Crypto", on_click=set_example, args=("Learn crypto trading from certified experts!",))
-        st.button("📱 Product", on_click=set_example, args=("Buy smartphone - free shipping over $50",))
+
+        st.button(
+            "🏥 Health Claim",
+            on_click=set_example,
+            args=("Lose 15 pounds in one week with this miracle pill!",)
+        )
+
+        st.button(
+            "💰 Crypto",
+            on_click=set_example,
+            args=("Learn crypto trading from certified experts!",)
+        )
+
+        st.button(
+            "📱 Product",
+            on_click=set_example,
+            args=("Buy smartphone - free shipping over $50",)
+        )
 
     # ---- Review Button ----
     if st.button("🔍 Review Ad", type="primary", use_container_width=True):
         if not ad_text.strip():
             st.warning("⚠️ Please enter ad text to review")
         else:
-            engine = load_engine()
+            with st.spinner("Loading AI engine..."):
+                engine = load_engine()
 
-            # Helper to show logs in Streamlit
-            log_area = st.empty()
-            logs = []
-
-            def st_log(message):
-                logs.append(message)
-                log_area.text("\n".join(logs))
-
-            # Monkey patch prints inside engine for live display
-            import builtins
-            original_print = builtins.print
-            builtins.print = st_log
-
-            start = time.time()
-            try:
+            with st.spinner("🤖 Analyzing ad against Google Ads policies..."):
+                start = time.time()
                 decision = engine.review_ad(ad_text)
-            finally:
-                builtins.print = original_print  # Restore
-
-            elapsed = time.time() - start
+                elapsed = time.time() - start
 
             st.markdown("---")
             st.header("📋 Policy Decision")
@@ -204,12 +208,14 @@ with tab1:
 # ======================================================
 with tab2:
     st.header("📚 Example Test Cases")
+
     examples = [
         ("Misleading Health Claims", "Lose 15 pounds in one week!", "disallowed"),
         ("Crypto Education", "Learn cryptocurrency trading online", "restricted"),
         ("Product Ad", "Buy our new smartphone today", "allowed"),
         ("Financial Guarantee", "Guaranteed 20% returns with no risk", "disallowed"),
     ]
+
     for name, ad, decision in examples:
         with st.expander(name):
             st.code(ad)
@@ -220,6 +226,7 @@ with tab2:
 # ======================================================
 with tab3:
     st.header("📈 System Metrics")
+
     st.markdown("""
     **Pipeline**
     - Hybrid Retrieval (BM25 + Dense)
